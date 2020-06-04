@@ -44,3 +44,51 @@ module "vpc" {
   secondary_cidr_subnetwork_bits = var.vpc_secondary_cidr_subnetwork_bits
 
 }
+
+
+# --------
+# FIREWALL
+# --------
+module "firewall" {
+
+  source = "./modules/firewall"
+
+  prefix  = "${var.name}-network"
+  network  = module.vpc.network
+
+}
+
+# ------------
+# VM INSTANCES
+# ------------
+data "google_compute_zones" "available" {
+  status = "UP"
+}
+
+resource "google_compute_instance" "public_with_ip" {
+
+  name  = "${var.name}-instance-public-with-ip"
+  zone  = data.google_compute_zones.available.names[0]
+  machine_type = local.machine_type_micro
+
+  # `true` will allow to update (resize the VM machine_type) after initial creation
+  allow_stopping_for_update = true
+
+  tags = [module.firewall.tag_public]
+
+  boot_disk {
+    initialize_params {
+      image = "debian-cloud/debian-9"
+    }
+  }
+
+  network_interface {
+    subnetwork = module.vpc.public_subnetwork
+
+    # IPs via which this instance can be accessed via the Internet.
+    # Omit to ensure that the instance is not accessible from the Internet.
+    access_config {
+      // Ephemeral IP
+    }
+  }
+}
