@@ -68,7 +68,6 @@ resource "google_compute_subnetwork" "vpc_subnetwork_public" {
 
 resource "google_compute_subnetwork" "vpc_subnetwork_private" {
   name = "${var.prefix}-subnetwork-private"
-  project = var.project
   region  = var.region
 
   # A reference to the vpc network.
@@ -106,7 +105,6 @@ resource "google_compute_subnetwork" "vpc_subnetwork_private" {
 # established inbound response packets.
 resource "google_compute_router_nat" "vpc_nat" {
   name = "${var.prefix}-nat"
-  project = var.project
   region  = var.region
 
   # The name of the Cloud Router in which this NAT will be configured.

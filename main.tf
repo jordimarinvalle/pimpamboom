@@ -26,6 +26,9 @@ provider "google" {
 
 }
 
+# Get the email of the service account used by the provider to authenticate
+# with GCP.
+data "google_client_openid_userinfo" "user" {}
 
 # ---
 # VPC
@@ -35,7 +38,6 @@ module "vpc" {
   source = "./modules/vpc"
 
   prefix  = "${var.name}-network"
-  project = var.project
   region  = var.region
 
   cidr_block = var.vpc_cidr_block
@@ -58,37 +60,34 @@ module "firewall" {
 
 }
 
-# ------------
-# VM INSTANCES
-# ------------
-data "google_compute_zones" "available" {
-  status = "UP"
-}
 
-resource "google_compute_instance" "public_with_ip" {
+# ---
+# GKE
+# ---
+module "gke" {
 
-  name  = "${var.name}-instance-public-with-ip"
-  zone  = data.google_compute_zones.available.names[0]
-  machine_type = local.machine_type_micro
+  source = "./modules/gke"
 
-  # `true` will allow to update (resize the VM machine_type) after initial creation
-  allow_stopping_for_update = true
+  prefix  = "${var.name}-gke"
+  location = var.location
 
-  tags = [module.firewall.tag_public]
+  # GKE cluster will be deployed in a private network,
+  # outbound internet access will be provided by NAT
+  network = module.vpc.network
+  subnetwork = module.vpc.private_subnetwork
 
-  boot_disk {
-    initialize_params {
-      image = "debian-cloud/debian-9"
-    }
-  }
+  # Configuration for private clusters with private nodes
+  enable_private_nodes = true
+  enable_private_endpoint = false
+  master_ipv4_cidr_block = var.gke_master_ipv4_cidr_block
 
-  network_interface {
-    subnetwork = module.vpc.public_subnetwork
+  # Needed to set the range for ip_aliases, GCP will pick the IPs within the range
+  cluster_secondary_range_name = module.vpc.private_subnetwork_secondary_range_name
 
-    # IPs via which this instance can be accessed via the Internet.
-    # Omit to ensure that the instance is not accessible from the Internet.
-    access_config {
-      // Ephemeral IP
-    }
-  }
+  # NODE POOL
+  ###########
+  node_machine_type = var.gke_pool_node_machine_type
+  node_tag_network_private = module.firewall.tag_private
+  service_account_email = data.google_client_openid_userinfo.user.email
+
 }
